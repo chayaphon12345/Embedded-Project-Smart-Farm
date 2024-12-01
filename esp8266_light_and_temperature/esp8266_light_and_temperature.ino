@@ -1,4 +1,6 @@
+// #include <ESP8266WiFi.h>
 #include <ESP8266WiFiMulti.h>
+#include <ESP8266HTTPClient.h>
 #include <ESP8266mDNS.h>
 #include <WiFiUdp.h>
 #include <ArduinoOTA.h>
@@ -15,15 +17,27 @@ WiFiClient telnetClient;
 // WiFiMulti
 ESP8266WiFiMulti wifiMulti;
 
+// IFTTT Credentials
+String server = "http://maker.ifttt.com";
+String eventTempName = "temp_record";
+String eventLightName = "light_record";
+String IFTTT_Key = "iH7pSxjtE5z_WnLhyg_qZ6G38R9X-Yr8B8Nxttcj8Z8";
+String tempIFTTTUrl="http://maker.ifttt.com/trigger/temp_record/with/key/iH7pSxjtE5z_WnLhyg_qZ6G38R9X-Yr8B8Nxttcj8Z8";
+String lightIFTTTUrl="https://maker.ifttt.com/trigger/light_record/with/key/iH7pSxjtE5z_WnLhyg_qZ6G38R9X-Yr8B8Nxttcj8Z8";
+
 int lightPin = A0;   
 int lightValue = 0;  
 
 float h, t, f, hif, hic;
 
+long now = millis();
+long lastMeasure = 0;
+
 void setup() {
   Serial.begin(115200);
   Serial.println("Booting");
 
+  wifiMulti.addAP("xxxxx", "xxxxx");
   wifiMulti.addAP("xxxxx", "xxxxx");
   wifiMulti.addAP("xxxxx", "xxxxx");
 
@@ -33,6 +47,14 @@ void setup() {
     delay(500);
   }
   Serial.println("WiFi connected");
+
+  // WiFi.mode(WIFI_STA);
+  // WiFi.begin(ssid, password);
+  // while (WiFi.waitForConnectResult() != WL_CONNECTED) {
+  //   Serial.println("Connection Failed! Rebooting...");
+  //   delay(5000);
+  //   ESP.restart();
+  // }
 
   telnetServer.begin();
   telnetServer.setNoDelay(true);
@@ -91,11 +113,18 @@ void loop() {
   }
   ArduinoOTA.handle();
 
-  temperature_sensor();
-  ldr_sensor();
+  now = millis();
+  // Publishes new data to google sheet every 10 seconds //ส่งข้อมูลไปทุกๆ 10 วินาที (หน่วย ms)
+  if (now - lastMeasure > 60000) {
+    lastMeasure = now;
+    
+    temperature_sensor();
+    ldr_sensor();
+    sendDataToSheet();
+  }
 
   telnet_monitor();
-  delay(10000);
+  delay(1000);
 }
 
 void temperature_sensor() {
@@ -136,6 +165,59 @@ void ldr_sensor() {
   Serial.print("Light Value = ");
   Serial.print(lightValue);
   Serial.println(" / 100");
+}
+
+void sendDataToSheet()
+{
+  String url = server + "/trigger/" + eventTempName + "/with/key/" + IFTTT_Key + "?value1=" + String((float)t) + "&value2="+String((float)f) +"&value3=" + String((float)h);  
+  Serial.println(url);
+  //Start to send data to IFTTT
+  WiFiClient client;
+  HTTPClient http;
+  Serial.print("[HTTP] begin...\n");
+  http.begin(client, url); //HTTP
+
+  Serial.print("[HTTP] GET...\n");
+  // start connection and send HTTP header
+  int httpCode = http.GET();
+  // httpCode will be negative on error
+  if(httpCode > 0) {
+    // HTTP header has been send and Server response header has been handled
+    Serial.printf("[HTTP] GET... code: %d\n", httpCode);
+    // file found at server
+    if(httpCode == HTTP_CODE_OK) {
+      String payload = http.getString();
+      Serial.println(payload);
+    }
+  } else {
+    Serial.printf("[HTTP] GET... failed, error: %s\n", http.errorToString(httpCode).c_str());
+  }
+  http.end();
+
+  String url2 = server + "/trigger/" + eventLightName + "/with/key/" + IFTTT_Key + "?value1=" + String((int)lightValue) + "&value2=&value3=";  
+  Serial.println(url2);
+  //Start to send data to IFTTT
+  WiFiClient client2;
+  HTTPClient http2;
+  Serial.print("[HTTP] begin...\n");
+  http2.begin(client2, url2); //HTTP
+
+  Serial.print("[HTTP] GET...\n");
+  // start connection and send HTTP header
+  int httpCode2 = http2.GET();
+  // httpCode will be negative on error
+  if(httpCode2 > 0) {
+    // HTTP header has been send and Server response header has been handled
+    Serial.printf("[HTTP] GET... code: %d\n", httpCode2);
+    // file found at server
+    if(httpCode2 == HTTP_CODE_OK) {
+      String payload = http2.getString();
+      Serial.println(payload);
+    }
+  } else {
+    Serial.printf("[HTTP] GET... failed, error: %s\n", http2.errorToString(httpCode2).c_str());
+  }
+  http2.end();
 }
 
 void telnet_monitor() {
