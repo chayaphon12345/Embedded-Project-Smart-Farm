@@ -12,19 +12,25 @@ WiFiClient telnetClient;
 // WiFiMulti
 ESP8266WiFiMulti wifiMulti;
 
-// NETPIE credentials
-const char* mqtt_server = "broker.netpie.io";
-const int mqtt_port = 1883;
-const char* mqtt_Client = "xxxxx";
-const char* mqtt_username = "xxxxx";
-const char* mqtt_password = "xxxxx";
-
-WiFiClient espClient;
-PubSubClient client(espClient);
+// IFTTT Credentials
+String server = "http://maker.ifttt.com";
+String eventName = "water_level_record";
+String IFTTT_Key = "iH7pSxjtE5z_WnLhyg_qZ6G38R9X-Yr8B8Nxttcj8Z8";
+String tempIFTTTUrl="https://maker.ifttt.com/trigger/water_level_record/with/key/iH7pSxjtE5z_WnLhyg_qZ6G38R9X-Yr8B8Nxttcj8Z8";
 
 // IFTTT notify url
 String url_email = "http://maker.ifttt.com/trigger/low_water_email/with/key/iH7pSxjtE5z_WnLhyg_qZ6G38R9X-Yr8B8Nxttcj8Z8";
 String url_line = "http://maker.ifttt.com/trigger/low_water_level/with/key/iH7pSxjtE5z_WnLhyg_qZ6G38R9X-Yr8B8Nxttcj8Z8";
+
+// NETPIE credentials
+const char* mqtt_server = "broker.netpie.io";
+const int mqtt_port = 1883;
+const char* mqtt_Client = "969b7bfa-bc04-424a-9716-eee8e24b5edb";
+const char* mqtt_username = "kgotaeMwmEsMxbZeEm6sF5gimMzfnLug";
+const char* mqtt_password = "12AUuSRnTMPYVbfbDpNgLZB8yvQFzYK9";
+
+WiFiClient espClient;
+PubSubClient client(espClient);
 
 // Pins
 #define trigPin 15
@@ -80,9 +86,9 @@ void setup() {
   Serial.println("Booting");
   delay(100);
 
-  wifiMulti.addAP("xxxxx", "xxxxx");
-  wifiMulti.addAP("xxxxx", "xxxxx");
-  wifiMulti.addAP("xxxxx", "xxxxx");
+  wifiMulti.addAP("26012022", "hammah123");
+  wifiMulti.addAP("CUHomeWiFi(2.4G)-0801", "430185436");
+  wifiMulti.addAP("OPPO Reno5 Mai", "af8zzevv");
 
   Serial.println("Connecting WiFi...");
   while (wifiMulti.run() != WL_CONNECTED) {
@@ -154,6 +160,7 @@ void loop() {
 
   water_level_measure();
   pump_control();
+  sendDataToSheet();
 
   telnet_monitor();
   delay(1000);
@@ -171,7 +178,7 @@ void water_level_measure() {
  
   distance = (duration/2) / 29.1;
 
-  waterLevel = 45 - distance;
+  waterLevel = max(45 - distance, 0);
 
   if ((waterLevel >= 0) & (waterLevel < 5) & (millis() > lastNotifyTime + notifyDelay)) {
     WiFiClient emailClient;
@@ -233,6 +240,34 @@ void pump_control() {
     digitalWrite(pumpPin, HIGH);
     Serial.println("Pump Off");
   }
+}
+
+void sendDataToSheet()
+{
+  String url = server + "/trigger/" + eventName + "/with/key/" + IFTTT_Key + "?value1=" + String((int)waterLevel) + "&value2=&value3=";  
+  Serial.println(url);
+  //Start to send data to IFTTT
+  WiFiClient sheetClient;
+  HTTPClient sheetHttp;
+  Serial.print("[HTTP] begin...\n");
+  sheetHttp.begin(sheetClient, url); //HTTP
+
+  Serial.print("[HTTP] GET...\n");
+  // start connection and send HTTP header
+  int sheetHttpCode = sheetHttp.GET();
+  // sheetHttpCode will be negative on error
+  if(sheetHttpCode > 0) {
+    // HTTP header has been send and Server response header has been handled
+    Serial.printf("[HTTP] GET... code: %d\n", sheetHttpCode);
+    // file found at server
+    if(sheetHttpCode == HTTP_CODE_OK) {
+      String payload = sheetHttp.getString();
+      Serial.println(payload);
+    }
+  } else {
+    Serial.printf("[HTTP] GET... failed, error: %s\n", sheetHttp.errorToString(sheetHttpCode).c_str());
+  }
+  sheetHttp.end();
 }
 
 void telnet_monitor() {
