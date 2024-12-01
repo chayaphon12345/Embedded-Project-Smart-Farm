@@ -25,9 +25,9 @@ String url_line = "http://maker.ifttt.com/trigger/low_water_level/with/key/iH7pS
 // NETPIE credentials
 const char* mqtt_server = "broker.netpie.io";
 const int mqtt_port = 1883;
-const char* mqtt_Client = "969b7bfa-bc04-424a-9716-eee8e24b5edb";
-const char* mqtt_username = "kgotaeMwmEsMxbZeEm6sF5gimMzfnLug";
-const char* mqtt_password = "12AUuSRnTMPYVbfbDpNgLZB8yvQFzYK9";
+const char* mqtt_Client = "xxxxx";
+const char* mqtt_username = "xxxxx";
+const char* mqtt_password = "xxxxx";
 
 WiFiClient espClient;
 PubSubClient client(espClient);
@@ -86,9 +86,9 @@ void setup() {
   Serial.println("Booting");
   delay(100);
 
-  wifiMulti.addAP("26012022", "hammah123");
-  wifiMulti.addAP("CUHomeWiFi(2.4G)-0801", "430185436");
-  wifiMulti.addAP("OPPO Reno5 Mai", "af8zzevv");
+  wifiMulti.addAP("xxxxx", "xxxxx");
+  wifiMulti.addAP("xxxxx", "xxxxx");
+  wifiMulti.addAP("xxxxx", "xxxxx");
 
   Serial.println("Connecting WiFi...");
   while (wifiMulti.run() != WL_CONNECTED) {
