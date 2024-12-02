@@ -1,15 +1,31 @@
-#include <WiFiMulti.h>
+#include <WiFi.h>
 #include <HTTPClient.h>
 #include <ESPmDNS.h>
 #include <NetworkUdp.h>
 #include <PubSubClient.h>
 #include <ArduinoOTA.h>
 
+#define BLYNK_TEMPLATE_ID "xxxxx"
+#define BLYNK_TEMPLATE_NAME "xxxxx"
+#define BLYNK_PRINT Serial
+#include <BlynkSimpleEsp32.h>
+
+char auth[] = "xxxxx";
+char ssid[] = "xxxxx";
+char pass[] = "xxxxx";
+
 WiFiServer telnetServer(23);
 WiFiClient telnetClient;
 
-// WiFiMulti
-WiFiMulti wifiMulti;
+const char *ssid = "xxxxx";
+const char *password = "xxxxx";
+
+// IFTTT Credentials
+String server = "http://maker.ifttt.com";
+String eventName = "soil_humid_and_pir_record";
+String IFTTT_Key = "iH7pSxjtE5z_WnLhyg_qZ6G38R9X-Yr8B8Nxttcj8Z8";
+String IFTTTUrl="https://maker.ifttt.com/trigger/soil_humid_and_pir_record/with/key/iH7pSxjtE5z_WnLhyg_qZ6G38R9X-Yr8B8Nxttcj8Z8";
+
 
 // NETPIE credentials
 const char* mqtt_server = "broker.netpie.io";
@@ -27,6 +43,8 @@ bool pumpState = false;
 int pirPin = 14;
 int pirValue = LOW;
 bool camState = false;
+
+long startTime = millis();
 
 void reconnect() {
   while (!client.connected()) {
@@ -49,16 +67,13 @@ void setup() {
   pinMode(soilMoisturePin, INPUT);
   pinMode(pirPin, INPUT);
 
-  wifiMulti.addAP("xxxxx", "xxxxx");
-  wifiMulti.addAP("xxxxx", "xxxxx");
-  wifiMulti.addAP("xxxxx", "xxxxx");
-
-  Serial.println("Connecting WiFi...");
-  while (wifiMulti.run() != WL_CONNECTED) {
-    Serial.print(".");
-    delay(500);
+  WiFi.mode(WIFI_STA);
+  WiFi.begin(ssid, password);
+  while (WiFi.waitForConnectResult() != WL_CONNECTED) {
+    Serial.println("Connection Failed! Rebooting...");
+    delay(5000);
+    ESP.restart();
   }
-  Serial.println("WiFi connected");
 
   client.setServer(mqtt_server, mqtt_port);
 
@@ -112,6 +127,7 @@ void setup() {
     });
 
   ArduinoOTA.begin();
+  Blynk.begin(auth, ssid, pass);
 
   Serial.println("Ready");
   Serial.print("IP address: ");
@@ -119,21 +135,25 @@ void setup() {
 }
 
 void loop() {
-  while (wifiMulti.run() != WL_CONNECTED) {
+  while (WiFi.status() != WL_CONNECTED) {
     Serial.print(".");
     delay(500);
   }
   ArduinoOTA.handle();
 
-  if (!client.connected()) {
+  if (!client.connected() & (millis()-startTime <= 180000)) {
     reconnect();
   }
   client.loop();
 
   pir_sensor();
   soil_sensor();
+  sendDataToSheet();
+  Blynk.virtualWrite(V6, soilMoistureValue);  // Soil Moisture Value
+  Blynk.virtualWrite(V4, pirValue); // Movement value
 
   telnet_monitor();
+  Blynk.run();
   delay(1000);
 }
 
@@ -182,6 +202,34 @@ void soil_sensor() {
       Serial.println("Still proper moisture. Continue turn off a pump.");
     }
   }
+}
+
+void sendDataToSheet()
+{
+  String url = server + "/trigger/" + eventName + "/with/key/" + IFTTT_Key + "?value1=" + String((float)soilMoistureValue) + "&value2="+String((int)pirValue) +"&value3=";  
+  Serial.println(url);
+  //Start to send data to IFTTT
+  WiFiClient soilClient;
+  HTTPClient soilHttp;
+  Serial.print("[HTTP] begin...\n");
+  soilHttp.begin(soilClient, url); //HTTP
+
+  Serial.print("[HTTP] GET...\n");
+  // start connection and send HTTP header
+  int soilHttpCode = soilHttp.GET();
+  // httpCode will be negative on error
+  if(soilHttpCode > 0) {
+    // HTTP header has been send and Server response header has been handled
+    Serial.printf("[HTTP] GET... code: %d\n", soilHttpCode);
+    // file found at server
+    if(soilHttpCode == HTTP_CODE_OK) {
+      String payload = soilHttp.getString();
+      Serial.println(payload);
+    }
+  } else {
+    Serial.printf("[HTTP] GET... failed, error: %s\n", soilHttp.errorToString(soilHttpCode).c_str());
+  }
+  soilHttp.end();
 }
 
 void telnet_monitor() {
