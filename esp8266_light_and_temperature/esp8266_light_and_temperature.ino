@@ -1,5 +1,4 @@
-// #include <ESP8266WiFi.h>
-#include <ESP8266WiFiMulti.h>
+#include <ESP8266WiFi.h>
 #include <ESP8266HTTPClient.h>
 #include <ESP8266mDNS.h>
 #include <WiFiUdp.h>
@@ -8,14 +7,18 @@
 
 #define DHTPIN 2     // Digital pin connected to the DHT sensor
 #define DHTTYPE DHT22   // DHT 22  (AM2302), AM2321
+#define BLYNK_TEMPLATE_ID "TMPL6q0am1neR"
+#define BLYNK_TEMPLATE_NAME "Embedded"
+#define BLYNK_PRINT Serial
+#include <BlynkSimpleEsp8266.h>
 
 DHT dht(DHTPIN, DHTTYPE);
+char auth[] = "xxxxx";
+char ssid[] = "xxxxx";
+char pass[] = "xxxxx";
 
 WiFiServer telnetServer(23);
 WiFiClient telnetClient;
-
-// WiFiMulti
-ESP8266WiFiMulti wifiMulti;
 
 // IFTTT Credentials
 String server = "http://maker.ifttt.com";
@@ -37,24 +40,15 @@ void setup() {
   Serial.begin(115200);
   Serial.println("Booting");
 
-  wifiMulti.addAP("xxxxx", "xxxxx");
-  wifiMulti.addAP("xxxxx", "xxxxx");
-  wifiMulti.addAP("xxxxx", "xxxxx");
+  WiFi.mode(WIFI_STA);
+  WiFi.begin(ssid, pass);
 
   Serial.println("Connecting WiFi...");
-  while (wifiMulti.run() != WL_CONNECTED) {
+  while (WiFi.status() != WL_CONNECTED) {
     Serial.print(".");
     delay(500);
   }
   Serial.println("WiFi connected");
-
-  // WiFi.mode(WIFI_STA);
-  // WiFi.begin(ssid, password);
-  // while (WiFi.waitForConnectResult() != WL_CONNECTED) {
-  //   Serial.println("Connection Failed! Rebooting...");
-  //   delay(5000);
-  //   ESP.restart();
-  // }
 
   telnetServer.begin();
   telnetServer.setNoDelay(true);
@@ -100,6 +94,7 @@ void setup() {
     }
   });
   ArduinoOTA.begin();
+  Blynk.begin(auth, ssid, pass);
   dht.begin();
   Serial.println("Ready");
   Serial.print("IP address: ");
@@ -107,20 +102,26 @@ void setup() {
 }
 
 void loop() {
-  while (wifiMulti.run() != WL_CONNECTED) {
+  while (WiFi.status() != WL_CONNECTED) {
     Serial.print(".");
     delay(500);
   }
   ArduinoOTA.handle();
 
   now = millis();
+  Blynk.run(); 
   // Publishes new data to google sheet every 10 seconds //ส่งข้อมูลไปทุกๆ 10 วินาที (หน่วย ms)
   if (now - lastMeasure > 60000) {
     lastMeasure = now;
-    
+   
     temperature_sensor();
     ldr_sensor();
     sendDataToSheet();
+
+    Blynk.virtualWrite(V1, t);       // Temperature
+    Blynk.virtualWrite(V3, h);       // Humidity
+    Blynk.virtualWrite(V2, lightValue); // light
+
   }
 
   telnet_monitor();
