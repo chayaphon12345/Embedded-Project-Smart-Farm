@@ -1,16 +1,29 @@
-#include <ESP8266WiFiMulti.h>
+#include <ESP8266WiFi.h>
 #include <ESP8266mDNS.h>
 #include <ESP8266HTTPClient.h>
 #include <WiFiUdp.h>
 #include <PubSubClient.h>
 #include <ArduinoOTA.h>
+#define BLYNK_TEMPLATE_ID "xxxxx"
+#define BLYNK_TEMPLATE_NAME "xxxxx"
+#define BLYNK_PRINT Serial
+#include <BlynkSimpleEsp8266.h>
 
 // Telnet server
 WiFiServer telnetServer(23);
 WiFiClient telnetClient;
 
-// WiFiMulti
-ESP8266WiFiMulti wifiMulti;
+char auth[] = "xxxxx";
+char ssid[] = "xxxxx";
+char pass[] = "xxxxx";
+
+// WiFi credentials
+#ifndef STASSID
+#define STASSID "xxxxx"
+#define STAPSK "xxxxx"
+#endif
+const char* ssid = STASSID;
+const char* password = STAPSK;
 
 // IFTTT Credentials
 String server = "http://maker.ifttt.com";
@@ -44,6 +57,18 @@ int waterLevel;
 String pumpControl = "off";
 unsigned long lastNotifyTime = -21600000;
 unsigned long notifyDelay = 21600000; // 6 hrs
+
+
+#define PUMP_CONTROL_VPIN V5 // Virtual pin for pump control
+
+BLYNK_WRITE(PUMP_CONTROL_VPIN) {  // Virtual pin for pump control
+  int pinValue = param.asInt(); // Get the value from the Blynk app (0 or 1)
+  if (pinValue == 1) {
+    pumpControl = "on";
+  } else {
+    pumpControl = "off";
+  }
+}
 
 
 void reconnect() {
@@ -86,16 +111,13 @@ void setup() {
   Serial.println("Booting");
   delay(100);
 
-  wifiMulti.addAP("xxxxx", "xxxxx");
-  wifiMulti.addAP("xxxxx", "xxxxx");
-  wifiMulti.addAP("xxxxx", "xxxxx");
-
-  Serial.println("Connecting WiFi...");
-  while (wifiMulti.run() != WL_CONNECTED) {
-    Serial.print(".");
-    delay(500);
+  WiFi.mode(WIFI_STA);
+  WiFi.begin(ssid, password);
+  while (WiFi.waitForConnectResult() != WL_CONNECTED) {
+    Serial.println("Connection Failed! Rebooting...");
+    delay(5000);
+    ESP.restart();
   }
-  Serial.println("WiFi connected");
 
   client.setServer(mqtt_server, mqtt_port);
   client.setCallback(callback);
@@ -141,17 +163,19 @@ void setup() {
     }
   });
   ArduinoOTA.begin();
+  Blynk.begin(auth, ssid, pass);
   Serial.println("Ready");
   Serial.print("IP address: ");
   Serial.println(WiFi.localIP());
 }
  
 void loop() {
-  while (wifiMulti.run() != WL_CONNECTED) {
+  while (WiFi.status()  != WL_CONNECTED) {
     Serial.print(".");
     delay(500);
   }
   ArduinoOTA.handle();
+  Blynk.run();
 
   if (!client.connected()) {
     reconnect();
@@ -161,6 +185,8 @@ void loop() {
   water_level_measure();
   pump_control();
   sendDataToSheet();
+  Blynk.virtualWrite(V7, waterLevel);       // Water Level
+
 
   telnet_monitor();
   delay(1000);
